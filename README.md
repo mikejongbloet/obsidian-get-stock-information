@@ -32,3 +32,7 @@ For example"
 >
 ><small>*Sun Apr 02 2023 18:28:05 GMT+0100 (British Summer Time)*</small>
 ```
+
+## Credit
+
+https://github.com/phamleduy04/yahoo-stock-api - the project I've used to pull in the information from Yahoo Finance
