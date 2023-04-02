@@ -1,137 +1,223 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { Editor, Plugin, Notice } from "obsidian";
+import { InsertLinkModal } from "./modal";
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
-}
-
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
-
+const yahooStockAPI = require("yahoo-stock-api").default;
+const yahoo = new yahooStockAPI();
+export default class StockInfoPlugin extends Plugin {
 	async onload() {
-		await this.loadSettings();
+		console.log("reloaded");
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+		// Add command to Obsidian quick tasks
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+		this.addCommand({
+			id: "insert-stock-info",
+			name: "Insert stock info",
+			editorCallback: (editor: Editor) => {
+				// get selected text
+				const selectedText = editor.getSelection();
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
+				// onSubmit of the form
+				const onSubmit = async (ticker: string) => {
+					// helper function: format a long number into millions or billions
+					const formatLongNumber = (n: number) => {
+						if (n < 1e9) return +(n / 1e6).toFixed(3) + "M";
+						if (n >= 1e9 && n < 1e12)
+							return +(n / 1e9).toFixed(3) + "B";
+						if (n >= 1e12) return +(n / 1e12).toFixed(1) + "T";
+					};
+
+					// helper function: check if a given date = today
+					const isToday = (someDate: Date) => {
+						const today = new Date();
+						return (
+							someDate.getDate() == today.getDate() &&
+							someDate.getMonth() == today.getMonth() &&
+							someDate.getFullYear() == today.getFullYear()
+						);
+					};
+
+					// create object to store stock return values
+					let stock: { [key: string]: any } = {};
+
+					// async function callHistoricalPrices(ticker: string) {
+					// 	try {
+					// 		const startDate: Date = new Date();
+					// 		const endDate: Date = new Date();
+
+					// 		// begin async call for historical prices
+					// 		return yahoo.getHistoricalPrices({
+					// 			startDate,
+					// 			endDate,
+					// 			symbol: ticker,
+					// 			frequency: "1d",
+					// 		});
+					// 	} catch (e) {
+					// 		console.error("An error occurred:", e);
+					// 		new Notice(
+					// 			"Error: couldn't retrieve stock information",
+					// 			15000
+					// 		);
+					// 	}
+					// }
+
+					async function callCurrentPrices(ticker: string) {
+						try {
+							return yahoo.getSymbol({
+								symbol: ticker,
+							});
+						} catch (e) {
+							console.error("An error occurred:", e);
+							new Notice(
+								"Error: couldn't retrieve stock information",
+								15000
+							);
+						}
 					}
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
+					// await the results of both async calls
+					const currentStockInfo = await callCurrentPrices(ticker);
+
+					//console.log(historicStockInfo);
+					console.log(currentStockInfo);
+
+					if (currentStockInfo.error) {
+						console.error(
+							"Error occurred:",
+							currentStockInfo.message
+						);
+						new Notice(
+							"Error: couldn't retrieve stock information",
+							15000
+						);
+					} else {
+						// Name of the stock
+						stock["name"] = currentStockInfo.name
+							? currentStockInfo.name
+							: null;
+
+						// Currency of the stock
+						stock["currency"] = currentStockInfo.currency
+							? currentStockInfo.currency
+							: null;
+
+						// Bid price of the stock
+						if (currentStockInfo.response.bid)
+							stock["bid"] = currentStockInfo.response.bid.value
+								? currentStockInfo.response.bid.value
+								: null;
+
+						// Ask price of the stock
+						if (currentStockInfo.response.ask)
+							stock["ask"] = currentStockInfo.response.ask.value
+								? currentStockInfo.response.ask.value
+								: null;
+
+						// Market cap of the stock
+						stock["marketCap"] = currentStockInfo.response.marketCap
+							? currentStockInfo.response.marketCap
+							: null;
+
+						// Previous close price of the stock
+						stock["previousClose"] = currentStockInfo.response
+							.previousClose
+							? currentStockInfo.response.previousClose
+							: null;
+
+						// Volume of shares for the stock
+						stock["volume"] = currentStockInfo.response.volume
+							? currentStockInfo.response.volume
+							: null;
+
+						// 52 week high
+						stock["fiftytwo_high"] = currentStockInfo.response
+							.fiftyTwoWeekRange.high
+							? currentStockInfo.response.fiftyTwoWeekRange.high
+							: null;
+
+						// 52 week low
+						stock["fiftytwo_low"] = currentStockInfo.response
+							.fiftyTwoWeekRange.low
+							? currentStockInfo.response.fiftyTwoWeekRange.low
+							: null;
+
+						// Day range high
+						stock["dayRange_high"] = currentStockInfo.response
+							.dayRange.high
+							? currentStockInfo.response.dayRange.high
+							: null;
+
+						// Day range low
+						stock["dayRange_low"] = currentStockInfo.response
+							.dayRange.low
+							? currentStockInfo.response.dayRange.low
+							: null;
+
+						// Date and time of provided information
+						stock["updated"] = currentStockInfo.response.updated
+							? currentStockInfo.response.updated
+							: null;
+
+						// BUILD OUTPUT
+						var output = "> [!info]- " + ticker + " ";
+						if (stock.bid && stock.ask)
+							output +=
+								"(Bid: " +
+								stock.bid +
+								", Ask: " +
+								stock.ask +
+								", Spread: " +
+								(
+									((stock.ask - stock.bid) / stock.ask) *
+									100
+								).toFixed(3) +
+								"%)";
+
+						if (stock.name) output += "\n> **Name:** " + stock.name;
+						// if (stock.dayChange)
+						// 	output +=
+						// 		" (" +
+						// 		stock.dayChange +
+						// 		" / " +
+						// 		stock.dayChangePercent +
+						// 		"%)";
+						if (stock.currency)
+							output += "\n> **Currency:** " + stock.currency;
+						if (stock.volume)
+							output +=
+								"\n> **Volume:** " +
+								stock.volume.toLocaleString("en-US");
+						if (stock.currency && stock.marketCap)
+							output +=
+								"\n> **Market cap:** " +
+								formatLongNumber(stock.marketCap);
+						if (stock.dayRange_low && stock.dayRange_high)
+							output +=
+								"\n> **Day range:** " +
+								stock.dayRange_low +
+								" – " +
+								stock.dayRange_high;
+						if (stock.fiftytwo_low && stock.fiftytwo_high)
+							output +=
+								"\n> **52W range:** " +
+								stock.fiftytwo_low +
+								" – " +
+								stock.fiftytwo_high;
+						if (stock.updated)
+							output +=
+								"\n>\n><small>*" +
+								new Date(stock.updated) +
+								"*</small>";
+
+						editor.replaceSelection(`${output}` + "\n\n");
+
+						for (var r in stock) delete stock[r];
+						for (var r in currentStockInfo)
+							delete currentStockInfo[r];
+					}
+				};
+
+				new InsertLinkModal(this.app, selectedText, onSubmit).open();
+			},
 		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
-
-	onunload() {
-
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
 	}
 }
