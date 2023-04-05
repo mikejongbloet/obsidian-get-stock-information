@@ -27,6 +27,7 @@ export default class StockInfoPlugin extends Plugin {
 						if (n >= 1e12) return +(n / 1e12).toFixed(1) + "T";
 					};
 
+					// helper function: log error
 					const logError = (msg: string) => {
 						console.error("Error occurred:", msg);
 						new Notice(
@@ -35,6 +36,7 @@ export default class StockInfoPlugin extends Plugin {
 						);
 					};
 
+					// function to call current stock prices
 					async function callCurrentPrices(ticker: string) {
 						try {
 							return yahoo.getSymbol({
@@ -50,42 +52,40 @@ export default class StockInfoPlugin extends Plugin {
 					}
 
 					// await the results of both async calls
-					const currentStockInfo = await callCurrentPrices(ticker);
-
-					console.log(currentStockInfo);
+					const callCurrentPricesResponse = await callCurrentPrices(
+						ticker
+					);
 
 					// create object to store stock return values
-					const stock: { [key: string]: any } = {};
+					const stock: { [key: string]: number | string | null } = {};
 
-					if (currentStockInfo) {
-						// check the API sent back something
-						if (!currentStockInfo.error) {
+					// check the API sent back something
+					if (callCurrentPricesResponse) {
+						if (!callCurrentPricesResponse.error) {
+							const currentStockInfo: getSymbolResponse =
+								callCurrentPricesResponse.response as getSymbolResponse;
+
 							// if the API didn't send back an error
-							stock["name"] = currentStockInfo.name ?? null; // Name of the stock
+							stock["name"] =
+								callCurrentPricesResponse.name ?? null; // Name of the stock
 							stock["currency"] =
-								currentStockInfo.currency ?? null; // Currency of the stock
-							stock["bid"] =
-								currentStockInfo.response.bid.value ?? null; // Bid price of the stock
-							stock["ask"] =
-								currentStockInfo.response.ask.value ?? null; // Ask price of the stock
+								callCurrentPricesResponse.currency ?? null; // Currency of the stock
+							stock["bid"] = currentStockInfo.bid.value ?? null; // Bid price of the stock
+							stock["ask"] = currentStockInfo.ask.value ?? null; // Ask price of the stock
 							stock["marketCap"] =
-								currentStockInfo.response.marketCap ?? null; // Market cap of the stock
+								currentStockInfo.marketCap ?? null; // Market cap of the stock
 							stock["previousClose"] =
-								currentStockInfo.response.previousClose ?? null; // Previous close price of the stock
-							stock["volume"] =
-								currentStockInfo.response.volume ?? null; // Volume of shares for the stock
+								currentStockInfo.previousClose ?? null; // Previous close price of the stock
+							stock["volume"] = currentStockInfo.volume ?? null; // Volume of shares for the stock
 							stock["fiftytwo_high"] =
-								currentStockInfo.response.fiftyTwoWeekRange
-									.high ?? null; // 52 week high
+								currentStockInfo.fiftyTwoWeekRange.high ?? null; // 52 week high
 							stock["fiftytwo_low"] =
-								currentStockInfo.response.fiftyTwoWeekRange
-									.low ?? null; // 52 week low
+								currentStockInfo.fiftyTwoWeekRange.low ?? null; // 52 week low
 							stock["dayRange_high"] =
-								currentStockInfo.response.dayRange.high ?? null; // Day range high
+								currentStockInfo.dayRange.high ?? null; // Day range high
 							stock["dayRange_low"] =
-								currentStockInfo.response.dayRange.low ?? null; // Day range low
-							stock["updated"] =
-								currentStockInfo.response.updated ?? null; // Date and time of provided information
+								currentStockInfo.dayRange.low ?? null; // Day range low
+							stock["updated"] = currentStockInfo.updated ?? null; // Date and time of provided information
 
 							// BUILD OUTPUT
 							let output = "> [!info]- " + ticker + " ";
@@ -144,11 +144,11 @@ export default class StockInfoPlugin extends Plugin {
 							editor.replaceSelection(`${output}` + "\n\n");
 
 							for (const r in stock) delete stock[r];
-							for (const r in currentStockInfo)
-								delete currentStockInfo[r];
 						} else {
 							// API call returned an error
-							logError(currentStockInfo.message as string);
+							logError(
+								callCurrentPricesResponse.message as string
+							);
 						}
 					} else {
 						// API call returned null
